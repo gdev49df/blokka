@@ -8,8 +8,9 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand">blokka</div>
+  <div class="brand"><span class="logo">▦</span> blokka</div>
   <div class="actions">
+    <button id="btnPresets" class="ghost">шаблоны</button>
     <button id="btnExport" class="ghost">сохранить проект</button>
     <label class="ghost btn-like">загрузить проект<input id="fileImport" type="file" accept=".json" hidden></label>
     <button id="btnZip" class="primary">скачать сайт (zip)</button>
@@ -18,52 +19,26 @@
 
 <main class="layout">
   <aside class="panel" id="panel">
-    <section>
-      <h3>шаблон</h3>
-      <div class="tpls" id="tpls"></div>
-    </section>
-
-    <section>
-      <h3>основное</h3>
-      <label>название<input data-k="name"></label>
-      <label>слоган<input data-k="tagline"></label>
-      <label>о нас<textarea data-k="about" rows="4"></textarea></label>
-      <label>текст кнопки<input data-k="cta"></label>
-    </section>
-
-    <section>
-      <h3>услуги и цены</h3>
-      <p class="hint">по одной на строку: название | цена | описание (необязательно)</p>
-      <textarea data-k="services" rows="7"></textarea>
-    </section>
-
-    <section>
-      <h3>контакты</h3>
-      <label>телефон<input data-k="phone" placeholder="+7 777 123 45 67"></label>
-      <label>whatsapp (номер)<input data-k="whatsapp" placeholder="77771234567"></label>
-      <label>instagram (ник)<input data-k="instagram" placeholder="my_business"></label>
-      <label>telegram (ник)<input data-k="telegram" placeholder="my_business"></label>
-      <label>адрес<input data-k="address"></label>
-      <label>часы работы<input data-k="hours"></label>
-      <label>ссылка на карту (2гис / google)<input data-k="map"></label>
-    </section>
-
-    <section>
-      <h3>оформление</h3>
-      <label>акцентный цвет<input type="color" data-k="accent"></label>
-      <label>фото на главной (ссылка)<input data-k="heroImage" placeholder="https://..."></label>
-      <label class="check"><input type="checkbox" data-k="showSign"> подпись в подвале</label>
-    </section>
+    <div class="tabs">
+      <button data-tab="blocks" class="on">блоки</button>
+      <button data-tab="site">сайт</button>
+    </div>
+    <div id="tabBlocks"></div>
+    <div id="tabSite" hidden></div>
   </aside>
 
   <section class="preview">
     <div class="bar">
       <button data-w="100%" class="on">пк</button>
       <button data-w="420px">телефон</button>
+      <span class="barhint">нажми на блок в превью, чтобы редактировать</span>
     </div>
     <div class="frame-wrap"><iframe id="frame" title="превью"></iframe></div>
   </section>
 </main>
+
+<dialog id="dlg"></dialog>
+<div id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="app.js"></script>
