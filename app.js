@@ -1,434 +1,28 @@
-/* blokka — блочный конструктор сайтов.
-   работает целиком в браузере, подходит для github pages. */
+/* blokka: редактор. правка прямо в превью, как в tilda. */
 'use strict';
 
 const $ = (s, r = document) => r.querySelector(s);
-const esc = s => String(s == null ? '' : s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const uid = () => 'b' + Math.random().toString(36).slice(2, 8);
-const digits = s => String(s || '').replace(/\D/g, '');
-const nick = s => String(s || '').trim().replace(/^https?:\/\/(t\.me|instagram\.com)\//, '').replace(/^@/, '').replace(/\/+$/, '');
-const cssUrl = u => esc(String(u).replace(/'/g, '%27').replace(/"/g, '%22').replace(/\(/g, '%28').replace(/\)/g, '%29'));
-const clone = o => JSON.parse(JSON.stringify(o));
-const ext = href => /^https?:/.test(href) ? ' target="_blank" rel="noopener"' : '';
 
-/* ---------- темы ---------- */
-
-const THEMES = {
-  sky:   { name: 'небо',    bg: '#f5f9fc', fg: '#12263a', card: '#ffffff', muted: '#5d7185', accent: '#1a8fd1', radius: 16, dark: false },
-  sun:   { name: 'солнце',  bg: '#fffaf0', fg: '#2a2217', card: '#ffffff', muted: '#7a6a52', accent: '#f08a24', radius: 20, dark: false },
-  neon:  { name: 'неон',    bg: '#0d0d14', fg: '#f1f1f7', card: '#171724', muted: '#9a9ab3', accent: '#8b5cf6', radius: 14, dark: true },
-  brick: { name: 'кирпич',  bg: '#fff6ee', fg: '#2b1d14', card: '#ffffff', muted: '#85685a', accent: '#d9602b', radius: 22, dark: false }
-};
-
-/* ---------- блоки: поля редактора ---------- */
-
-const TITLE = { k: 'title', l: 'заголовок', t: 'text' };
-
-const BLOCKS = {
-  hero: {
-    name: 'обложка', icon: '🖼️', menu: null,
-    defaults: () => ({ title: 'название бизнеса', sub: 'коротко о том, чем вы полезны клиентам', cta: 'связаться', image: '' }),
-    fields: [
-      TITLE,
-      { k: 'sub', l: 'подзаголовок', t: 'textarea', rows: 3 },
-      { k: 'cta', l: 'текст кнопки', t: 'text' },
-      { k: 'image', l: 'фоновое фото', t: 'image' }
-    ]
-  },
-  about: {
-    name: 'о нас', icon: '💬', menu: 'о нас',
-    defaults: () => ({ title: 'о нас', text: 'расскажите о себе: чем занимаетесь, чем отличаетесь, почему вам доверяют.', image: '' }),
-    fields: [
-      TITLE,
-      { k: 'text', l: 'текст', t: 'textarea', rows: 5 },
-      { k: 'image', l: 'фото', t: 'image' }
-    ]
-  },
-  services: {
-    name: 'услуги и цены', icon: '💰', menu: 'услуги',
-    defaults: () => ({ title: 'услуги и цены', items: [
-      { title: 'услуга 1', price: '5 000 ₸', desc: '' },
-      { title: 'услуга 2', price: '10 000 ₸', desc: '' },
-      { title: 'услуга 3', price: '15 000 ₸', desc: '' }
-    ] }),
-    fields: [
-      TITLE,
-      { k: 'items', t: 'list', l: 'услуги', add: '+ услуга', label: i => i.title || 'услуга',
-        sub: [
-          { k: 'title', l: 'название', t: 'text' },
-          { k: 'price', l: 'цена', t: 'text' },
-          { k: 'desc', l: 'описание', t: 'textarea', rows: 2 }
-        ] }
-    ]
-  },
-  gallery: {
-    name: 'галерея', icon: '📷', menu: 'галерея',
-    defaults: () => ({ title: 'галерея', items: [{ image: '' }, { image: '' }, { image: '' }] }),
-    fields: [
-      TITLE,
-      { k: 'items', t: 'list', l: 'фото', add: '+ фото', label: (i, n) => 'фото ' + (n + 1),
-        sub: [{ k: 'image', l: 'фото', t: 'image' }] }
-    ]
-  },
-  reviews: {
-    name: 'отзывы', icon: '⭐', menu: 'отзывы',
-    defaults: () => ({ title: 'отзывы', items: [
-      { name: 'имя клиента', text: 'здесь будет отзыв клиента о вашей работе.' },
-      { name: 'имя клиента', text: 'ещё один отзыв, лучше с конкретным результатом.' }
-    ] }),
-    fields: [
-      TITLE,
-      { k: 'items', t: 'list', l: 'отзывы', add: '+ отзыв', label: i => i.name || 'отзыв',
-        sub: [
-          { k: 'name', l: 'имя', t: 'text' },
-          { k: 'text', l: 'отзыв', t: 'textarea', rows: 3 }
-        ] }
-    ]
-  },
-  faq: {
-    name: 'вопросы и ответы', icon: '❓', menu: 'вопросы',
-    defaults: () => ({ title: 'частые вопросы', items: [
-      { q: 'как записаться?', a: 'напишите нам в whatsapp или позвоните.' },
-      { q: 'где вы находитесь?', a: 'адрес указан в разделе «контакты».' }
-    ] }),
-    fields: [
-      TITLE,
-      { k: 'items', t: 'list', l: 'вопросы', add: '+ вопрос', label: i => i.q || 'вопрос',
-        sub: [
-          { k: 'q', l: 'вопрос', t: 'text' },
-          { k: 'a', l: 'ответ', t: 'textarea', rows: 3 }
-        ] }
-    ]
-  },
-  cta: {
-    name: 'призыв к действию', icon: '📣', menu: null,
-    defaults: () => ({ title: 'готовы начать?', text: 'напишите нам, и мы всё расскажем.', button: 'написать в whatsapp' }),
-    fields: [
-      TITLE,
-      { k: 'text', l: 'текст', t: 'textarea', rows: 2 },
-      { k: 'button', l: 'текст кнопки', t: 'text' }
-    ]
-  },
-  contacts: {
-    name: 'контакты', icon: '📍', menu: 'контакты',
-    defaults: () => ({ title: 'контакты', note: '' }),
-    fields: [
-      TITLE,
-      { k: 'note', l: 'заметка (необязательно)', t: 'textarea', rows: 2 },
-      { k: '_hint', t: 'hint', l: 'телефон, адрес и мессенджеры заполняются на вкладке «сайт»' }
-    ]
-  }
-};
-
-/* ---------- готовые шаблоны ---------- */
-
-function preset(o) {
-  return {
-    title: o.title, sub: o.sub,
-    site: { name: o.name, theme: o.theme, hours: o.hours },
-    blocks: [
-      { type: 'hero', data: { title: o.name, sub: o.tagline, cta: o.cta, image: '' } },
-      { type: 'about', data: { title: 'о нас', text: o.about, image: '' } },
-      { type: 'services', data: { title: 'услуги и цены', items: o.services.map(([title, price, desc]) => ({ title, price, desc: desc || '' })) } },
-      { type: 'gallery', data: { title: 'галерея', items: [{ image: '' }, { image: '' }, { image: '' }] } },
-      { type: 'reviews', data: { title: 'отзывы', items: o.reviews.map(([name, text]) => ({ name, text })) } },
-      { type: 'faq', data: { title: 'частые вопросы', items: o.faq.map(([q, a]) => ({ q, a })) } },
-      { type: 'cta', data: { title: o.ctaTitle, text: o.ctaText, button: o.cta } },
-      { type: 'contacts', data: { title: 'контакты', note: '' } }
-    ]
-  };
-}
-
-const PRESETS = {
-  clinic: preset({
-    title: 'клиника', sub: 'светлый и спокойный', theme: 'sky', hours: 'пн–сб 09:00–20:00',
-    name: 'стоматология «улыбка»', tagline: 'лечим без боли и заботимся о вашей улыбке',
-    cta: 'записаться на приём',
-    about: 'современная клиника в центре города. опытные врачи, цифровая диагностика и честные цены без скрытых доплат.',
-    services: [['консультация', 'бесплатно', 'осмотр и план лечения'], ['лечение кариеса', 'от 15 000 ₸'], ['профессиональная чистка', '18 000 ₸'], ['отбеливание', '45 000 ₸']],
-    reviews: [['айгерим', 'вылечили зуб без боли, объяснили каждый шаг. рекомендую.'], ['марат', 'приятная атмосфера и честная цена, пришёл по рекомендации друга.']],
-    faq: [['нужна ли запись заранее?', 'да, так мы сможем уделить вам достаточно времени.'], ['есть ли гарантия на лечение?', 'да, гарантия зависит от вида услуги, подробности скажет врач.']],
-    ctaTitle: 'запишитесь на бесплатную консультацию', ctaText: 'ответим на вопросы и подберём время, которое удобно вам.'
-  }),
-  school: preset({
-    title: 'школа / курсы', sub: 'тёплый и дружелюбный', theme: 'sun', hours: 'пн–сб 09:00–21:00',
-    name: 'english school', tagline: 'заговорите на английском за 6 месяцев',
-    cta: 'записаться на пробный урок',
-    about: 'небольшие группы, живые преподаватели и разговорная практика на каждом занятии. первый урок бесплатно.',
-    services: [['группа для взрослых', '28 000 ₸/мес', '2 раза в неделю'], ['группа для детей', '24 000 ₸/мес'], ['индивидуально', '6 000 ₸/урок'], ['подготовка к ielts', '35 000 ₸/мес']],
-    reviews: [['динара, мама ученика', 'ребёнок бежит на занятия с удовольствием, уже заговорил.'], ['асхат', 'за полгода поднял уровень с нуля до b1, преподаватели супер.']],
-    faq: [['с какого возраста берёте детей?', 'с 5 лет, группы формируются по возрасту.'], ['как проходит пробный урок?', 'знакомимся, определяем уровень и подбираем группу.']],
-    ctaTitle: 'первый урок бесплатно', ctaText: 'запишитесь, и мы подберём группу под ваш уровень.'
-  }),
-  club: preset({
-    title: 'клуб / игры', sub: 'тёмный и неоновый', theme: 'neon', hours: 'круглосуточно',
-    name: 'cyber club', tagline: 'мощные пк, быстрый интернет и своя атмосфера',
-    cta: 'забронировать место',
-    about: 'игровые зоны, vip-комнаты и буткемп для турниров. работаем круглосуточно, бронь через whatsapp.',
-    services: [['стандарт', '1 000 ₸/час'], ['vip', '1 500 ₸/час'], ['ночной пакет', '4 500 ₸'], ['буткемп на 5 человек', '7 000 ₸/час']],
-    reviews: [['тимур', 'пинг низкий, железо мощное, на турнир собрались всей командой.'], ['данияр', 'чисто, удобные кресла, бронь прошла за минуту.']],
-    faq: [['можно ли забронировать заранее?', 'да, напишите в whatsapp и назовите время.'], ['есть ли скидки?', 'ночной пакет и абонементы выходят выгоднее почасовой оплаты.']],
-    ctaTitle: 'собирай команду и приходи', ctaText: 'бронь места занимает минуту.'
-  }),
-  cafe: preset({
-    title: 'кафе / еда', sub: 'уютный и аппетитный', theme: 'brick', hours: 'ежедневно 10:00–23:00',
-    name: 'кафе «уют»', tagline: 'вкусно, быстро и по-домашнему',
-    cta: 'заказать',
-    about: 'готовим из свежих продуктов каждый день. есть доставка по городу и бронирование столов.',
-    services: [['шаурма классическая', '1 800 ₸'], ['бургер', '2 400 ₸'], ['кофе', 'от 900 ₸'], ['бизнес-ланч', '2 900 ₸']],
-    reviews: [['алина', 'очень вкусно и быстро, доставили горячим.'], ['руслан', 'часто заказываем в офис, порции большие.']],
-    faq: [['есть ли доставка?', 'да, по всему городу, время и стоимость уточняйте при заказе.'], ['можно ли заказать на мероприятие?', 'да, напишите нам за день.']],
-    ctaTitle: 'проголодались?', ctaText: 'закажите прямо сейчас, доставим горячим.'
-  })
-};
-
-/* ---------- состояние ---------- */
-
-const defaultSite = () => ({
-  name: 'мой сайт', theme: 'sky', accent: '',
-  phone: '', whatsapp: '', telegram: '', instagram: '', address: '', hours: '', map: '',
-  showSign: true, floatWa: true
-});
-
-function fromPreset(id, keep) {
-  const p = PRESETS[id];
-  return {
-    site: Object.assign(defaultSite(), p.site, keep || {}),
-    blocks: p.blocks.map(b => ({ id: uid(), type: b.type, data: clone(b.data) })),
-    selected: null
-  };
-}
-
-function normalize(o) {
-  if (!o || !Array.isArray(o.blocks) || !o.site) return null;
-  const site = Object.assign(defaultSite(), o.site);
-  if (!THEMES[site.theme]) site.theme = 'sky';
-  const blocks = o.blocks.filter(b => b && BLOCKS[b.type]).map(b => ({
-    id: b.id || uid(), type: b.type, data: Object.assign(BLOCKS[b.type].defaults(), b.data || {})
-  }));
-  return { site, blocks, selected: null };
-}
+let state = load() || fromPreset('clinic');
 
 function load() {
   try { return normalize(JSON.parse(localStorage.getItem('blokka') || 'null')); } catch (e) { return null; }
 }
-
-let state = load() || fromPreset('clinic');
-let paletteOpen = false;
-
 function save() {
   try { localStorage.setItem('blokka', JSON.stringify({ site: state.site, blocks: state.blocks })); }
   catch (e) { toast('не хватило места в браузере, сохрани проект в файл'); }
 }
+let saveTimer = null;
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
 
 const findBlock = id => state.blocks.find(b => b.id === id);
 
-/* ---------- генерация сайта ---------- */
-
-function ctaHref(st) {
-  const s = st.site;
-  if (digits(s.whatsapp)) return 'https://wa.me/' + digits(s.whatsapp);
-  if (nick(s.telegram)) return 'https://t.me/' + nick(s.telegram);
-  if (digits(s.phone)) return 'tel:' + String(s.phone).replace(/[^\d+]/g, '');
-  const c = st.blocks.find(b => b.type === 'contacts');
-  return c ? '#' + c.id : '#';
-}
-
-const at = (b, c) => `id="${b.id}"${c.pv ? ` data-bid="${b.id}"` : ''}`;
-
-const RENDER = {
-  hero(b, s, c) {
-    const d = b.data;
-    const ov = c.t.dark ? 'rgba(10,10,18,.72),rgba(10,10,18,.88)' : 'rgba(255,255,255,.72),rgba(255,255,255,.9)';
-    const st = d.image ? ` style="background-image:linear-gradient(${ov}),url('${cssUrl(d.image)}')"` : '';
-    return `<header ${at(b, c)} class="hero${d.image ? ' has-img' : ''}"${st}><div class="wrap">
-  <h1>${esc(d.title)}</h1>${d.sub ? `\n  <p>${esc(d.sub)}</p>` : ''}${d.cta ? `\n  <a class="btn" href="${esc(c.cta)}"${ext(c.cta)}>${esc(d.cta)}</a>` : ''}
-</div></header>`;
-  },
-
-  about(b, s, c) {
-    const d = b.data;
-    return `<section ${at(b, c)}><div class="wrap"><div class="about${d.image ? ' two' : ''}">
-  <div>${d.title ? `<h2>${esc(d.title)}</h2>` : ''}<p>${esc(d.text)}</p></div>${d.image ? `\n  <img src="${esc(d.image)}" alt="">` : ''}
-</div></div></section>`;
-  },
-
-  services(b, s, c) {
-    const d = b.data;
-    const items = (d.items || []).filter(i => i.title || i.price);
-    return `<section ${at(b, c)}><div class="wrap">${d.title ? `<h2>${esc(d.title)}</h2>` : ''}<div class="grid">
-${items.map(i => `  <div class="card"><h4>${esc(i.title)}</h4>${i.price ? `<div class="price">${esc(i.price)}</div>` : ''}${i.desc ? `<p>${esc(i.desc)}</p>` : ''}</div>`).join('\n')}
-</div></div></section>`;
-  },
-
-  gallery(b, s, c) {
-    const d = b.data;
-    const items = (d.items || []).filter(i => i.image || c.pv);
-    if (!items.length) return '';
-    return `<section ${at(b, c)}><div class="wrap">${d.title ? `<h2>${esc(d.title)}</h2>` : ''}<div class="gal">
-${items.map(i => i.image ? `  <img src="${esc(i.image)}" alt="" loading="lazy">` : '  <div class="ph">фото</div>').join('\n')}
-</div></div></section>`;
-  },
-
-  reviews(b, s, c) {
-    const d = b.data;
-    const items = (d.items || []).filter(i => i.text);
-    return `<section ${at(b, c)}><div class="wrap">${d.title ? `<h2>${esc(d.title)}</h2>` : ''}<div class="grid">
-${items.map(i => `  <div class="card rev"><q>${esc(i.text)}</q>${i.name ? `<small>${esc(i.name)}</small>` : ''}</div>`).join('\n')}
-</div></div></section>`;
-  },
-
-  faq(b, s, c) {
-    const d = b.data;
-    const items = (d.items || []).filter(i => i.q);
-    return `<section ${at(b, c)}><div class="wrap">${d.title ? `<h2>${esc(d.title)}</h2>` : ''}
-${items.map(i => `  <details><summary>${esc(i.q)}</summary><p>${esc(i.a)}</p></details>`).join('\n')}
-</div></section>`;
-  },
-
-  cta(b, s, c) {
-    const d = b.data;
-    return `<section ${at(b, c)}><div class="wrap"><div class="banner">
-  <h2>${esc(d.title)}</h2>${d.text ? `<p>${esc(d.text)}</p>` : ''}${d.button ? `<a class="btn" href="${esc(c.cta)}"${ext(c.cta)}>${esc(d.button)}</a>` : ''}
-</div></div></section>`;
-  },
-
-  contacts(b, s, c) {
-    const d = b.data;
-    const links = [];
-    if (s.phone) links.push(`<a href="tel:${esc(String(s.phone).replace(/[^\d+]/g, ''))}">${esc(s.phone)}</a>`);
-    if (digits(s.whatsapp)) links.push(`<a href="https://wa.me/${digits(s.whatsapp)}" target="_blank" rel="noopener">whatsapp</a>`);
-    if (nick(s.telegram)) links.push(`<a href="https://t.me/${esc(nick(s.telegram))}" target="_blank" rel="noopener">telegram</a>`);
-    if (nick(s.instagram)) links.push(`<a href="https://instagram.com/${esc(nick(s.instagram))}" target="_blank" rel="noopener">instagram</a>`);
-    const rows = [];
-    if (s.address) rows.push(`<div>📍 ${esc(s.address)}${s.map ? ` — <a href="${esc(s.map)}" target="_blank" rel="noopener">на карте</a>` : ''}</div>`);
-    if (s.hours) rows.push(`<div>🕒 ${esc(s.hours)}</div>`);
-    if (d.note) rows.push(`<div class="note">${esc(d.note)}</div>`);
-    if (links.length) rows.push(`<div class="links">${links.join('')}</div>`);
-    if (!rows.length && c.pv) rows.push('<div class="note">заполните контакты на вкладке «сайт»</div>');
-    return `<section ${at(b, c)}><div class="wrap">${d.title ? `<h2>${esc(d.title)}</h2>` : ''}<div class="card contacts-card">
-${rows.join('\n')}
-</div></div></section>`;
-  }
-};
-
-function siteCSS(t, accent, pv) {
-  const nav = t.dark ? 'rgba(13,13,20,.85)' : 'rgba(255,255,255,.85)';
-  const line = t.dark ? '#ffffff14' : '#00000010';
-  return `:root{--bg:${t.bg};--fg:${t.fg};--card:${t.card};--muted:${t.muted};--accent:${accent};--r:${t.radius}px}
-*{box-sizing:border-box}
-html{scroll-behavior:${pv ? 'auto' : 'smooth'}}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);line-height:1.55}
-img{max-width:100%;display:block}
-.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
-nav{position:sticky;top:0;z-index:5;background:${nav};backdrop-filter:blur(10px);border-bottom:1px solid ${line}}
-nav .wrap{display:flex;justify-content:space-between;align-items:center;height:60px}
-nav b{font-size:18px}
-nav a{color:var(--fg);text-decoration:none;margin-left:18px;font-size:14px;opacity:.8}
-.hero{padding:96px 0 80px;background:radial-gradient(900px 400px at 80% -10%,${accent}33,transparent 60%),var(--bg)}
-.hero.has-img{background-size:cover;background-position:center}
-.hero h1{font-size:clamp(32px,6vw,56px);line-height:1.1;margin:0 0 14px}
-.hero p{font-size:18px;color:var(--muted);max-width:560px;margin:0 0 28px;white-space:pre-line}
-.btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;padding:14px 26px;border-radius:calc(var(--r) - 4px);box-shadow:0 8px 24px ${accent}55}
-section{padding:52px 0}
-h2{font-size:28px;margin:0 0 22px}
-.about{display:grid;grid-template-columns:1fr;gap:28px;align-items:center}
-.about.two{grid-template-columns:1.2fr 1fr}
-.about h2{margin-bottom:14px}
-.about p{color:var(--muted);font-size:17px;margin:0;white-space:pre-line}
-.about img{border-radius:var(--r);width:100%;max-height:380px;object-fit:cover}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
-.card{background:var(--card);border-radius:var(--r);padding:20px;border:1px solid ${line}}
-.card h4{margin:0 0 6px;font-size:17px}
-.price{color:var(--accent);font-weight:700;font-size:18px}
-.card p{margin:6px 0 0;color:var(--muted);font-size:14px;white-space:pre-line}
-.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-.gal img,.gal .ph{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r)}
-.ph{background:${line};display:grid;place-items:center;color:var(--muted);font-size:13px}
-.rev q{display:block;quotes:none;font-size:16px}
-.rev small{display:block;margin-top:12px;color:var(--muted);font-weight:600}
-details{background:var(--card);border:1px solid ${line};border-radius:calc(var(--r) - 4px);padding:14px 18px;margin-bottom:10px}
-summary{cursor:pointer;font-weight:600}
-details p{color:var(--muted);margin:10px 0 0;white-space:pre-line}
-.banner{background:var(--accent);color:#fff;border-radius:var(--r);padding:44px 28px;text-align:center}
-.banner h2{margin:0 0 8px}
-.banner p{margin:0 0 22px;opacity:.9}
-.banner .btn{background:#fff;color:var(--accent);box-shadow:none}
-.contacts-card{display:grid;gap:10px}
-.contacts-card a{color:var(--accent);text-decoration:none;font-weight:600}
-.contacts-card .note{color:var(--muted);white-space:pre-line}
-.links{display:flex;gap:16px;flex-wrap:wrap}
-footer{padding:28px 0 40px;text-align:center;color:var(--muted);font-size:13px}
-.fab{position:fixed;right:18px;bottom:18px;z-index:6;width:56px;height:56px;border-radius:50%;background:#25d366;color:#fff;display:grid;place-items:center;font-size:26px;text-decoration:none;box-shadow:0 8px 24px #0004}
-@media(max-width:700px){nav a{display:none}.hero{padding:64px 0 52px}.about.two{grid-template-columns:1fr}}${pv ? '\n[data-bid]{cursor:pointer}\n.sel{outline:3px solid #1a73e8;outline-offset:-3px}' : ''}`;
-}
-
-const PREVIEW_JS = `
-document.addEventListener('click', function (e) {
-  var a = e.target.closest('a[href^="#"]');
-  if (a) {
-    e.preventDefault();
-    var t = document.getElementById(a.getAttribute('href').slice(1));
-    if (t) t.scrollIntoView({ behavior: 'smooth' });
-  }
-  var b = e.target.closest('[data-bid]');
-  if (b) { e.preventDefault(); parent.postMessage({ blokka: 'select', id: b.dataset.bid }, '*'); }
-}, true);
-window.addEventListener('message', function (e) {
-  var d = e.data;
-  if (!d || d.blokka !== 'hl') return;
-  var old = document.querySelector('.sel');
-  if (old) old.classList.remove('sel');
-  if (!d.id) return;
-  var el = document.querySelector('[data-bid="' + d.id + '"]');
-  if (el) { el.classList.add('sel'); if (d.scroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-});`;
-
-const MENU_LABEL = { about: 'о нас', services: 'услуги', gallery: 'галерея', reviews: 'отзывы', faq: 'вопросы', contacts: 'контакты' };
-
-function buildSite(st, pv) {
-  const s = st.site;
-  const t = THEMES[s.theme] || THEMES.sky;
-  const accent = s.accent || t.accent;
-  const c = { pv: !!pv, t, cta: ctaHref(st) };
-
-  const seen = {};
-  const menu = [];
-  st.blocks.forEach(b => {
-    const label = BLOCKS[b.type].menu;
-    if (!label || seen[b.type]) return;
-    seen[b.type] = true;
-    if (b.type === 'gallery' && !pv && !(b.data.items || []).some(i => i.image)) return;
-    menu.push(`<a href="#${b.id}">${label}</a>`);
-  });
-
-  const hero = st.blocks.find(b => b.type === 'hero');
-  const desc = hero && hero.data.sub ? hero.data.sub : s.name;
-  const body = st.blocks.map(b => RENDER[b.type](b, s, c)).filter(Boolean).join('\n\n');
-  const fab = s.floatWa && digits(s.whatsapp)
-    ? `\n<a class="fab" href="https://wa.me/${digits(s.whatsapp)}" target="_blank" rel="noopener" aria-label="whatsapp">💬</a>` : '';
-  const sign = s.showSign ? '<br>Создано @bauyrzhanov_12_' : '';
-
-  return `<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(s.name)}</title>
-<meta name="description" content="${esc(desc)}">
-<style>
-${siteCSS(t, accent, pv)}
-</style>
-</head>
-<body>
-<nav><div class="wrap"><b>${esc(s.name)}</b><div>${menu.join('')}</div></div></nav>
-
-${body}
-
-<footer><div class="wrap">© ${new Date().getFullYear()} ${esc(s.name)}${sign}</div></footer>${fab}${pv ? `\n<script>${PREVIEW_JS}</script>` : ''}
-</body>
-</html>`;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => { t.hidden = true; }, 3500);
 }
 
 /* ---------- превью ---------- */
@@ -457,17 +51,119 @@ frame.addEventListener('load', () => {
   scrollToSel = false;
 });
 
+function commit(rebuild) {
+  save();
+  if (rebuild) renderBlocksTab();
+  renderPreview();
+}
+
+function setValue(ds, v) {
+  const b = findBlock(ds.bid);
+  if (!b) return;
+  if (ds.i != null) b.data[ds.k][+ds.i][ds.sk] = v;
+  else b.data[ds.k] = v;
+}
+
+/* сообщения из превью */
+
 window.addEventListener('message', e => {
+  if (e.source !== frame.contentWindow) return;
   const d = e.data;
-  if (e.source !== frame.contentWindow || !d || d.blokka !== 'select') return;
-  if (!findBlock(d.id)) return;
+  if (!d || !d.blokka) return;
+  if (d.blokka === 'select') return onSelect(d.id);
+  if (d.blokka === 'edit') return onInlineEdit(d);
+  if (d.blokka === 'imgfile') return onImgFile(d);
+  if (d.blokka === 'act') return onAct(d);
+});
+
+function onSelect(id) {
+  if (!findBlock(id)) return;
   setTab('blocks');
-  state.selected = d.id;
+  if (state.selected !== id) {
+    state.selected = id;
+    renderBlocksTab();
+    const open = $('.bcard.open');
+    if (open) open.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  highlight(id, false);
+}
+
+function onInlineEdit(d) {
+  if (d.se) {
+    state.site[d.se] = d.value;
+    const inp = $(`#tabSite [data-s="${d.se}"]`);
+    if (inp && inp.value !== d.value) inp.value = d.value;
+    return saveSoon();
+  }
+  setValue(d, d.value);
+  const sel = `#tabBlocks [data-bid="${d.bid}"][data-k="${d.k}"]` + (d.i != null ? `[data-i="${d.i}"][data-sk="${d.sk}"]` : '') + '[data-f]';
+  const inp = $(sel);
+  if (inp && inp.value !== d.value) inp.value = d.value;
+  if (d.k === 'title' && d.i == null) {
+    const sub = $(`#tabBlocks .bcard[data-id="${d.bid}"] .bsub`);
+    if (sub) sub.textContent = String(d.value).slice(0, 26);
+  }
+  saveSoon();
+}
+
+async function onImgFile(d) {
+  try {
+    setValue(d, await resizeImage(d.file, 1400, 0.78));
+    commit(true);
+  } catch (err) { toast('не удалось прочитать картинку'); }
+}
+
+function onAct(d) {
+  if (d.act === 'ins') return openCatalog(+d.idx);
+  if (!findBlock(d.id)) return;
+  if (d.act === 'up') return moveBlock(d.id, -1);
+  if (d.act === 'down') return moveBlock(d.id, 1);
+  if (d.act === 'dup') return dupBlock(d.id);
+  if (d.act === 'del') return delBlock(d.id);
+}
+
+/* ---------- действия над блоками ---------- */
+
+function moveBlock(id, delta) {
+  const i = state.blocks.findIndex(b => b.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= state.blocks.length) return;
+  [state.blocks[i], state.blocks[j]] = [state.blocks[j], state.blocks[i]];
+  commit(true);
+}
+
+function dupBlock(id) {
+  const i = state.blocks.findIndex(b => b.id === id);
+  if (i < 0) return;
+  const copy = Object.assign(clone(state.blocks[i]), { id: uid() });
+  state.blocks.splice(i + 1, 0, copy);
+  state.selected = copy.id;
+  scrollToSel = true;
+  save();
   renderBlocksTab();
-  highlight(d.id, false);
+  renderPreview(true);
+}
+
+function delBlock(id) {
+  if (!confirm('удалить блок?')) return;
+  state.blocks = state.blocks.filter(b => b.id !== id);
+  if (state.selected === id) state.selected = null;
+  commit(true);
+}
+
+function addBlock(type, variant, idx) {
+  const b = { id: uid(), type, variant: variant || 1, data: BLOCKS[type].defaults(), set: defaultSet() };
+  const at = idx == null ? state.blocks.length : Math.min(Math.max(0, idx), state.blocks.length);
+  state.blocks.splice(at, 0, b);
+  state.selected = b.id;
+  scrollToSel = true;
+  setTab('blocks');
+  save();
+  renderBlocksTab();
+  renderPreview(true);
   const open = $('.bcard.open');
   if (open) open.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-});
+}
 
 /* ---------- панель: блоки ---------- */
 
@@ -490,6 +186,7 @@ function fieldHTML(f, val, p) {
   if (f.t === 'hint') return `<p class="hint">${esc(f.l)}</p>`;
   if (f.t === 'image') return imageHTML(f, val, p);
   const a = attrs(p);
+  if (f.t === 'check') return `<label class="check"><input type="checkbox" ${a} data-f${val ? ' checked' : ''}> ${esc(f.l)}</label>`;
   if (f.t === 'textarea') return `<label>${esc(f.l)}<textarea ${a} data-f rows="${f.rows || 3}">${esc(val)}</textarea></label>`;
   return `<label>${esc(f.l)}<input ${a} data-f value="${esc(val)}"></label>`;
 }
@@ -504,23 +201,35 @@ ${items.map((it, i) => `<div class="litem"><div class="lihead"><b>${esc(f.label(
 <button class="mini add" data-act="litem-add" ${base}>${esc(f.add)}</button></div>`;
 }
 
+const opts = (cur, list) => list.map(([v, n]) => `<option value="${v}"${cur === v ? ' selected' : ''}>${n}</option>`).join('');
+
+function blockBody(b) {
+  const def = BLOCKS[b.type];
+  const set = b.set;
+  return `<div class="bbody">
+${def.fields.map(f => f.t === 'list' ? listHTML(b, f) : fieldHTML(f, b.data[f.k], { bid: b.id, k: f.k })).join('')}
+${def.variants.length > 1 ? `<h3>вид блока</h3><div class="chips">${def.variants.map((n, i) => `<button class="chip${(b.variant || 1) === i + 1 ? ' on' : ''}" data-act="variant" data-v="${i + 1}">${esc(n)}</button>`).join('')}</div>` : ''}
+<h3>настройки блока</h3>
+<label>фон<select data-set="bg">${opts(set.bg, [['', 'как в теме'], ['alt', 'чуть другой'], ['light', 'светлый'], ['dark', 'тёмный'], ['accent', 'акцентный']])}</select></label>
+<label>отступы<select data-set="pad">${opts(set.pad, [['s', 'маленькие'], ['m', 'обычные'], ['l', 'большие']])}</select></label>
+<label>выравнивание<select data-set="align">${opts(set.align, [['left', 'слева'], ['center', 'по центру']])}</select></label>
+<label class="check"><input type="checkbox" data-set="hide"${set.hide ? ' checked' : ''}> скрыть блок на сайте</label>
+</div>`;
+}
+
 function blockCard(b) {
   const def = BLOCKS[b.type];
   const open = state.selected === b.id;
   const sub = String(b.data.title || b.data.text || '').slice(0, 26);
-  const body = open
-    ? `<div class="bbody">${def.fields.map(f => f.t === 'list' ? listHTML(b, f) : fieldHTML(f, b.data[f.k], { bid: b.id, k: f.k })).join('')}</div>`
-    : '';
-  return `<div class="bcard${open ? ' open' : ''}" data-id="${b.id}">
+  return `<div class="bcard${open ? ' open' : ''}${b.set.hide ? ' off' : ''}" data-id="${b.id}">
   <div class="bhead" data-act="sel"><span class="grip" title="перетащить">⋮⋮</span><span class="bname">${def.icon} ${def.name}</span><span class="bsub">${esc(sub)}</span>
-    <span class="bbtns"><button data-act="up" title="выше">↑</button><button data-act="down" title="ниже">↓</button><button data-act="dup" title="дублировать">⧉</button><button data-act="del" title="удалить">✕</button></span></div>${body}
+    <span class="bbtns"><button data-act="up" title="выше">↑</button><button data-act="down" title="ниже">↓</button><button data-act="dup" title="дублировать">⧉</button><button data-act="del" title="удалить">✕</button></span></div>${open ? blockBody(b) : ''}
 </div>`;
 }
 
 function renderBlocksTab() {
   $('#tabBlocks').innerHTML = `<div class="blist">${state.blocks.map(blockCard).join('')}</div>
-<button class="addbtn" data-act="toggle-add">${paletteOpen ? '− скрыть список блоков' : '+ добавить блок'}</button>
-<div class="palette"${paletteOpen ? '' : ' hidden'}>${Object.entries(BLOCKS).map(([k, d]) => `<button data-add="${k}"><span>${d.icon}</span>${d.name}</button>`).join('')}</div>`;
+<button class="addbtn" data-act="catalog">+ добавить блок</button>`;
 }
 
 /* ---------- панель: сайт ---------- */
@@ -529,13 +238,22 @@ function renderSiteTab() {
   const s = state.site;
   const t = THEMES[s.theme] || THEMES.sky;
   const inp = (k, l, ph) => `<label>${l}<input data-s="${k}" value="${esc(s[k])}"${ph ? ` placeholder="${ph}"` : ''}></label>`;
+  const sel = (k, l, list) => `<label>${l}<select data-s="${k}">${opts(s[k], list)}</select></label>`;
+  const color = (k, l, def) => `<label>${l}<span class="crow"><input type="color" data-s="${k}" value="${esc(s[k] || def)}"><button class="mini" data-act="reset" data-key="${k}">как в теме</button></span></label>`;
   $('#tabSite').innerHTML = `
 <h3>название</h3>
 ${inp('name', 'название сайта (шапка и подвал)')}
-<h3>тема</h3>
+<h3>тема и цвета</h3>
 <div class="themes">${Object.entries(THEMES).map(([k, th]) => `<button class="theme${s.theme === k ? ' on' : ''}" data-theme="${k}" style="--c:${th.accent};--b:${th.bg};color:${th.fg}"><i></i>${th.name}</button>`).join('')}</div>
-<label>акцентный цвет<input type="color" data-s="accent" value="${esc(s.accent || t.accent)}"></label>
-<button class="mini" data-act="accent-reset" style="margin-top:6px">как в теме</button>
+${color('accent', 'акцентный цвет', t.accent)}
+${color('bg', 'цвет фона', t.bg)}
+${color('fg', 'цвет текста', t.fg)}
+<h3>шрифты и кнопки</h3>
+${sel('fontHead', 'шрифт заголовков', Object.entries(FONTS).map(([k, f]) => [k, f.name]))}
+${sel('fontBody', 'шрифт текста', Object.entries(FONTS).map(([k, f]) => [k, f.name]))}
+${sel('btnShape', 'форма кнопок', [['round', 'скруглённые'], ['square', 'прямые'], ['pill', 'таблетка']])}
+${sel('btnLook', 'вид кнопок', [['fill', 'залитые'], ['outline', 'с обводкой']])}
+${inp('navBtn', 'кнопка в шапке (текст, необязательно)', 'записаться')}
 <h3>контакты</h3>
 ${inp('phone', 'телефон', '+7 777 123 45 67')}
 ${inp('whatsapp', 'whatsapp (номер)', '77771234567')}
@@ -544,7 +262,13 @@ ${inp('instagram', 'instagram (ник)', 'my_business')}
 ${inp('address', 'адрес')}
 ${inp('hours', 'часы работы')}
 ${inp('map', 'ссылка на карту (2гис / google)')}
+<h3>seo и соцсети</h3>
+${inp('seoTitle', 'заголовок страницы (title)', 'если пусто, берётся название')}
+${inp('seoDesc', 'описание (description)', 'если пусто, берётся подзаголовок')}
+${inp('ogImage', 'картинка для превью в соцсетях (ссылка https)')}
+${inp('favicon', 'иконка вкладки (один эмодзи)', '🦷')}
 <h3>прочее</h3>
+<label class="check"><input type="checkbox" data-s="anim"${s.anim ? ' checked' : ''}> плавное появление блоков при прокрутке</label>
 <label class="check"><input type="checkbox" data-s="floatWa"${s.floatWa ? ' checked' : ''}> кнопка whatsapp в углу</label>
 <label class="check"><input type="checkbox" data-s="showSign"${s.showSign ? ' checked' : ''}> подпись «Создано @bauyrzhanov_12_» в подвале</label>`;
 }
@@ -556,49 +280,7 @@ function setTab(name) {
   if (name === 'site') renderSiteTab();
 }
 
-/* ---------- действия ---------- */
-
-function commit(rebuild) {
-  save();
-  if (rebuild) renderBlocksTab();
-  renderPreview();
-}
-
-function setValue(ds, v) {
-  const b = findBlock(ds.bid);
-  if (!b) return;
-  if (ds.i !== undefined) b.data[ds.k][+ds.i][ds.sk] = v;
-  else b.data[ds.k] = v;
-}
-
-function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.hidden = false;
-  clearTimeout(toast.t);
-  toast.t = setTimeout(() => { t.hidden = true; }, 3500);
-}
-
-function addBlock(type) {
-  const b = { id: uid(), type, data: BLOCKS[type].defaults() };
-  state.blocks.push(b);
-  state.selected = b.id;
-  paletteOpen = false;
-  scrollToSel = true;
-  save();
-  renderBlocksTab();
-  renderPreview(true);
-  const open = $('.bcard.open');
-  if (open) open.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-
-function moveBlock(id, delta) {
-  const i = state.blocks.findIndex(b => b.id === id);
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= state.blocks.length) return;
-  [state.blocks[i], state.blocks[j]] = [state.blocks[j], state.blocks[i]];
-  commit(true);
-}
+/* ---------- события панели ---------- */
 
 function resizeImage(file, max, quality) {
   return new Promise((resolve, reject) => {
@@ -628,15 +310,21 @@ const panel = $('#panel');
 
 panel.addEventListener('input', e => {
   const el = e.target;
+  const val = el.type === 'checkbox' ? el.checked : el.value;
   if (el.dataset.f !== undefined) {
-    setValue(el.dataset, el.value);
+    setValue(el.dataset, val);
     if (el.dataset.k === 'title' && el.dataset.i === undefined) {
       const sub = el.closest('.bcard') && el.closest('.bcard').querySelector('.bsub');
-      if (sub) sub.textContent = el.value.slice(0, 26);
+      if (sub) sub.textContent = String(val).slice(0, 26);
     }
     commit(false);
+  } else if (el.dataset.set !== undefined) {
+    const b = findBlock(el.closest('.bcard').dataset.id);
+    b.set[el.dataset.set] = val;
+    if (el.dataset.set === 'hide') el.closest('.bcard').classList.toggle('off', !!val);
+    commit(false);
   } else if (el.dataset.s) {
-    state.site[el.dataset.s] = el.type === 'checkbox' ? el.checked : el.value;
+    state.site[el.dataset.s] = val;
     commit(false);
   }
 });
@@ -645,12 +333,9 @@ panel.addEventListener('change', async e => {
   const el = e.target;
   if (el.dataset.up === undefined || !el.files || !el.files[0]) return;
   try {
-    const url = await resizeImage(el.files[0], 1400, 0.78);
-    setValue(el.dataset, url);
+    setValue(el.dataset, await resizeImage(el.files[0], 1400, 0.78));
     commit(true);
-  } catch (err) {
-    toast('не удалось прочитать картинку');
-  }
+  } catch (err) { toast('не удалось прочитать картинку'); }
   el.value = '';
 });
 
@@ -658,12 +343,9 @@ panel.addEventListener('click', e => {
   const t = e.target;
   const tab = t.closest('[data-tab]');
   if (tab) return setTab(tab.dataset.tab);
-  const add = t.closest('[data-add]');
-  if (add) return addBlock(add.dataset.add);
   const th = t.closest('[data-theme]');
   if (th) {
-    state.site.theme = th.dataset.theme;
-    state.site.accent = '';
+    Object.assign(state.site, { theme: th.dataset.theme, accent: '', bg: '', fg: '' });
     renderSiteTab();
     return commit(false);
   }
@@ -674,29 +356,17 @@ panel.addEventListener('click', e => {
   const ds = a.dataset;
 
   switch (ds.act) {
-    case 'toggle-add':
-      paletteOpen = !paletteOpen;
-      return renderBlocksTab();
+    case 'catalog': return openCatalog(null);
     case 'sel':
       state.selected = state.selected === id ? null : id;
       renderBlocksTab();
       return highlight(state.selected, true);
     case 'up': return moveBlock(id, -1);
     case 'down': return moveBlock(id, 1);
-    case 'dup': {
-      const i = state.blocks.findIndex(b => b.id === id);
-      const copy = { id: uid(), type: state.blocks[i].type, data: clone(state.blocks[i].data) };
-      state.blocks.splice(i + 1, 0, copy);
-      state.selected = copy.id;
-      scrollToSel = true;
-      save();
-      renderBlocksTab();
-      return renderPreview(true);
-    }
-    case 'del':
-      if (!confirm('удалить блок?')) return;
-      state.blocks = state.blocks.filter(b => b.id !== id);
-      if (state.selected === id) state.selected = null;
+    case 'dup': return dupBlock(id);
+    case 'del': return delBlock(id);
+    case 'variant':
+      findBlock(id).variant = +ds.v;
       return commit(true);
     case 'imgurl': {
       const u = prompt('ссылка на картинку (https://...)');
@@ -706,8 +376,8 @@ panel.addEventListener('click', e => {
     case 'imgclr':
       setValue(ds, '');
       return commit(true);
-    case 'accent-reset':
-      state.site.accent = '';
+    case 'reset':
+      state.site[ds.key] = '';
       renderSiteTab();
       return commit(false);
     case 'litem-add': case 'litem-up': case 'litem-down': case 'litem-del': {
@@ -735,6 +405,7 @@ panel.addEventListener('click', e => {
 
 let dragId = null;
 const clearMarks = () => document.querySelectorAll('.over-top,.over-bottom,.drag').forEach(x => x.classList.remove('over-top', 'over-bottom', 'drag'));
+const unlockCards = () => document.querySelectorAll('.bcard[draggable="true"]').forEach(x => { x.draggable = false; });
 
 panel.addEventListener('mousedown', e => {
   const g = e.target.closest('.grip');
@@ -772,13 +443,39 @@ panel.addEventListener('drop', e => {
   dragId = null;
   commit(true);
 });
-panel.addEventListener('dragend', () => {
-  document.querySelectorAll('.bcard[draggable="true"]').forEach(x => { x.draggable = false; });
-  dragId = null;
-  clearMarks();
-});
-document.addEventListener('mouseup', () => {
-  if (!dragId) document.querySelectorAll('.bcard[draggable="true"]').forEach(x => { x.draggable = false; });
+panel.addEventListener('dragend', () => { unlockCards(); dragId = null; clearMarks(); });
+document.addEventListener('mouseup', () => { if (!dragId) unlockCards(); });
+
+/* ---------- каталог блоков ---------- */
+
+const cat = $('#cat');
+let insertAt = null;
+
+function openCatalog(idx) {
+  insertAt = idx;
+  const chips = [['all', 'все'], ...CATS];
+  const cards = Object.entries(BLOCKS).flatMap(([type, def]) => def.variants.map((vn, vi) =>
+    `<div class="ccard" role="button" tabindex="0" data-type="${type}" data-v="${vi + 1}" data-cat="${def.cat}">
+  <div class="cprev"><iframe tabindex="-1" loading="lazy" srcdoc="${esc(buildBlockPreview(type, vi + 1, state))}"></iframe></div>
+  <span>${def.icon} ${def.name}${def.variants.length > 1 ? ` · ${esc(vn)}` : ''}</span></div>`));
+  cat.innerHTML = `<div class="dhead"><b>выбери блок</b><button data-close>✕</button></div>
+<div class="chips fchips">${chips.map(([id, n], k) => `<button class="chip${k ? '' : ' on'}" data-fcat="${id}">${n}</button>`).join('')}</div>
+<div class="cgrid">${cards.join('')}</div>`;
+  cat.showModal();
+}
+
+cat.addEventListener('click', e => {
+  if (e.target === cat || e.target.closest('[data-close]')) return cat.close();
+  const f = e.target.closest('[data-fcat]');
+  if (f) {
+    cat.querySelectorAll('[data-fcat]').forEach(x => x.classList.toggle('on', x === f));
+    cat.querySelectorAll('.ccard').forEach(c => { c.hidden = f.dataset.fcat !== 'all' && c.dataset.cat !== f.dataset.fcat; });
+    return;
+  }
+  const c = e.target.closest('.ccard');
+  if (!c) return;
+  cat.close();
+  addBlock(c.dataset.type, +c.dataset.v, insertAt);
 });
 
 /* ---------- верхняя панель ---------- */
@@ -853,7 +550,7 @@ $('#fileImport').onchange = e => {
 const dlg = $('#dlg');
 $('#btnPresets').onclick = () => {
   dlg.innerHTML = `<div class="dhead"><b>готовые шаблоны</b><button data-close>✕</button></div>
-<p class="hint">шаблон заменит блоки и тему. контакты и подпись сохранятся.</p>
+<p class="hint">шаблон заменит блоки, тему и шрифты. контакты и подпись сохранятся.</p>
 <div class="pgrid">${Object.entries(PRESETS).map(([k, p]) => `<button class="pcard" data-preset="${k}"><b>${p.title}</b><span>${p.sub}</span><i>${p.blocks.length} блоков</i></button>`).join('')}</div>`;
   dlg.showModal();
 };

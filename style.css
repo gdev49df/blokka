@@ -60,6 +60,22 @@ h3{margin:18px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06e
 .thumb{width:84px;height:60px;border-radius:9px;border:1px dashed #cfd4dc;background:#f4f6f9 center/cover no-repeat;display:grid;place-items:center;font-size:11px;color:#9aa1ad;flex:none}
 .imgbtns{display:flex;gap:6px;flex-wrap:wrap}
 
+select{display:block;width:100%;margin-top:4px;padding:9px 10px;border:1px solid #d5d9e0;border-radius:9px;font:inherit;color:#1b1f27;background:#fff}
+.bcard.off .bname{opacity:.5;text-decoration:line-through}
+.crow{display:flex;gap:8px;align-items:center;margin-top:4px}
+.crow input[type=color]{margin-top:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chip{padding:6px 12px;border-radius:999px;font-size:13px}
+.chip.on{background:#1b1f27;color:#fff;border-color:#1b1f27}
+
+/* каталог блоков */
+#cat{max-width:980px}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,285px);gap:16px;justify-content:center;margin-top:14px;max-height:62vh;overflow:auto;padding:4px}
+.ccard{display:grid;gap:8px;cursor:pointer;font-size:13px;font-weight:600}
+.ccard:hover .cprev{border-color:#1a73e8;box-shadow:0 0 0 3px #1a73e833}
+.cprev{width:285px;height:150px;overflow:hidden;border-radius:12px;border:1px solid #d5d9e0;background:#fff;position:relative}
+.cprev iframe{width:1040px;height:556px;border:0;transform:scale(.274);transform-origin:0 0;pointer-events:none}
+
 /* темы */
 .themes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}
 .theme{padding:8px 4px;font-size:12px;display:grid;gap:6px;justify-items:center;background:var(--b)}
